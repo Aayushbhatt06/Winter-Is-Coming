@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, Check, Sparkles, Sunrise, Moon, Brain, BookOpen, Dumbbell, Footprints, Droplets, PhoneOff, Heart, Salad, Plus, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BicepsFlexed, Check, Sparkles, Sunrise, Moon, Brain, BookOpen, Dumbbell, Footprints, Droplets, PhoneOff, Heart, Salad, Plus, X } from "lucide-react";
 import type { Goal, TrackerOptions } from "@/lib/types";
+import ThemeControl from "@/components/ThemeControl";
 
 const suggestions = [
   { name: "Walk 10,000 steps", category: "Movement", icon: Footprints },
@@ -51,7 +52,7 @@ export default function AuthForm({ mode }: { mode: "signup" | "login" }) {
   const totalSteps = 4;
 
   return <main className="auth-page">
-    <Link href="/" className="brand"><span className="brand-mark"><Sparkles size={17}/></span> winter arc</Link>
+    <div className="auth-brand-row"><Link href="/" className="brand"><span className="brand-mark"><BicepsFlexed size={18}/></span> Winter Is Coming</Link><ThemeControl/></div>
     <div className="auth-card">
       {mode === "signup" && <div className="step-meta"><span>YOUR WINTER ARC · STEP {step + 1} OF {totalSteps}</span><div className="progress-line"><i style={{ width: `${((step + 1) / totalSteps) * 100}%` }}/></div></div>}
       {mode === "login" ? <>

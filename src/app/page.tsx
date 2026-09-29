@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { ArrowRight, Check, Sparkles } from "lucide-react";
+import { ArrowRight, BicepsFlexed, Check, Sparkles } from "lucide-react";
+import ThemeControl from "@/components/ThemeControl";
 export default function Home() {
   return <main className="landing">
-    <header className="landing-nav"><Link href="/" className="brand"><span className="brand-mark"><Sparkles size={17}/></span> winter arc</Link><div><Link href="/login" className="nav-login">Log in</Link><Link href="/signup" className="button button-primary nav-cta">Begin your arc <ArrowRight size={15}/></Link></div></header>
+    <header className="landing-nav"><Link href="/" className="brand"><span className="brand-mark"><BicepsFlexed size={18}/></span> Winter Is Coming</Link><div><ThemeControl/><Link href="/login" className="nav-login">Log in</Link><Link href="/signup" className="button button-primary nav-cta">Begin your arc <ArrowRight size={15}/></Link></div></header>
     <section className="hero"><div className="hero-copy"><span className="eyebrow"><span className="live-dot"/> A QUIETER KIND OF PROGRESS</span><h1>Become a little<br/><em>more you.</em></h1><p className="hero-sub">A personal space for the promises you make to yourself. Choose your habits, show up each day, and see how far small steps can take you.</p><div className="hero-actions"><Link href="/signup" className="button button-primary">Set up your Winter Arc <ArrowRight size={16}/></Link><span>Free, personal, and yours.</span></div><div className="hero-proof"><div className="proof-avatars"><b>A</b><b>M</b><b>R</b></div><span>A fresh start, at your own pace</span></div></div>
       <div className="hero-art"><div className="art-orbit orbit-one"/><div className="art-orbit orbit-two"/><div className="art-card"><div className="art-top"><span>YOUR DAILY PRACTICE</span><span>✳</span></div><div className="art-date">A good day<br/><i>to begin.</i></div><div className="art-divider"/><div className="art-habit"><span className="art-check"><Check size={13}/></span><span>Move my body</span><small>done</small></div><div className="art-habit"><span className="art-check"><Check size={13}/></span><span>Read a little</span><small>done</small></div><div className="art-habit pending"><span className="art-check"/><span>Get good rest</span><small>up next</small></div><div className="art-quote"><Sparkles size={14}/><span>Look at you, keeping a promise to yourself.</span></div></div><div className="art-floating floating-top">✿ <span>One day at a time</span></div><div className="art-floating floating-bottom"><span className="tiny-ring">76%</span><span>showing up<br/>for yourself</span></div><div className="hero-sun"/></div>
     </section>
     <section className="landing-bottom"><div><span className="eyebrow">NO PERFECT DAYS REQUIRED</span><p>Just a thoughtful little nudge to<br/>keep going.</p></div><div className="landing-quote"><span>“</span><p>You don’t have to see the whole staircase.<br/>Just take the first step.</p><small>— MARTIN LUTHER KING JR.</small></div></section>
-    <footer className="landing-footer"><span>WINTER ARC · A SEASON FOR YOU</span><span>Made for the long game.</span></footer>
+    <footer className="landing-footer"><span>WINTER IS COMING · A SEASON FOR YOU</span><span>Made for the long game.</span></footer>
   </main>;
 }

@@ -1,6 +1,6 @@
-# Winter Arc
+# Winter Is Coming
 
-A personal Winter Arc habit tracker built with Next.js, TypeScript, MongoDB, secure cookie sessions, and optional Cloudinary photo uploads.
+A personal habit tracker built with Next.js, TypeScript, MongoDB, secure cookie sessions, and optional Cloudinary photo uploads.
 
 ## Run locally
 
