@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ArrowDownToLine, ArrowRight, ArrowUpRight, BicepsFlexed, Check, CloudSun, Flame, Leaf, LogOut, Menu, Plus, Settings2, Sparkles, Trash2, Upload, X } from "lucide-react";
@@ -26,6 +26,11 @@ export default function Dashboard() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
+  const [savingCheckin, setSavingCheckin] = useState(false);
+  const goalIdsRef = useRef<string[]>([]);
+  const persistedGoalIdsRef = useRef<string[]>([]);
+  const goalSaveWorkerRef = useRef(false);
+  const goalSaveSequenceRef = useRef(0);
   const [trackerDate, setTrackerDate] = useState("");
   const [weight, setWeight] = useState("");
   const [mood, setMood] = useState("");
@@ -36,7 +41,7 @@ export default function Dashboard() {
   const [mobileMenu, setMobileMenu] = useState(false);
 
   const refresh = useCallback(async () => {
-    try { const response = await fetch("/api/me", { cache: "no-store" }); if (response.status === 401) { router.replace("/login"); return; } const data = await response.json(); if (!response.ok) throw new Error(data.error); setProfile(data.profile); setCheckins(data.checkins); setProgressPhotos(data.progressPhotos || []); const merged = new Map<string, TrackerEntry>(); for (const entry of data.checkins as Checkin[]) if (entry.weight || entry.mood || entry.sleep) merged.set(entry.date, { date: entry.date, weight: entry.weight, mood: entry.mood, sleep: entry.sleep }); for (const entry of (data.trackerEntries || []) as TrackerEntry[]) merged.set(entry.date, { ...merged.get(entry.date), ...entry }); setTrackerEntries([...merged.values()].sort((a, b) => a.date.localeCompare(b.date))); setTrackerDate(todayLocal(data.profile.timeZone || "UTC")); } catch (e) { setError(e instanceof Error ? e.message : "Couldn’t load your arc."); } finally { setLoading(false); }
+    try { const response = await fetch("/api/me", { cache: "no-store" }); if (response.status === 401) { router.replace("/login"); return; } const data = await response.json(); if (!response.ok) throw new Error(data.error); const date = todayLocal(data.profile.timeZone || "UTC"); const initialGoalIds = (data.checkins as Checkin[]).find((entry) => entry.date === date)?.goalIds || []; goalIdsRef.current = [...initialGoalIds]; persistedGoalIdsRef.current = [...initialGoalIds]; setProfile(data.profile); setCheckins(data.checkins); setProgressPhotos(data.progressPhotos || []); const merged = new Map<string, TrackerEntry>(); for (const entry of data.checkins as Checkin[]) if (entry.weight || entry.mood || entry.sleep) merged.set(entry.date, { date: entry.date, weight: entry.weight, mood: entry.mood, sleep: entry.sleep }); for (const entry of (data.trackerEntries || []) as TrackerEntry[]) merged.set(entry.date, { ...merged.get(entry.date), ...entry }); setTrackerEntries([...merged.values()].sort((a, b) => a.date.localeCompare(b.date))); setTrackerDate(date); } catch (e) { setError(e instanceof Error ? e.message : "Couldn’t load your arc."); } finally { setLoading(false); }
   }, [router]);
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => {
@@ -69,12 +74,43 @@ export default function Dashboard() {
   const moodData = trackerEntries.filter((entry) => entry.mood !== undefined).map((entry) => ({ label: compactDate(entry.date), value: entry.mood as number }));
   const sleepData = trackerEntries.filter((entry) => entry.sleep !== undefined).map((entry) => ({ label: compactDate(entry.date), value: entry.sleep as number }));
 
-  async function saveCheckin(patch: Record<string, unknown>) {
-    if (!profile || !withinArc) return;
-    setSaving(true); setError("");
-    const current = checkins.find((entry) => entry.date === today);
-    const body = { date: today, goalIds: current?.goalIds || [], ...patch };
-    try { const response = await fetch("/api/checkin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const result = await response.json(); if (!response.ok) throw new Error(result.error); setCheckins((old) => [...old.filter((entry) => entry.date !== today), result.checkin].sort((a,b) => a.date.localeCompare(b.date))); if (patch.goalIds && (patch.goalIds as string[]).length === profile.goals.length) { setNotice(praise[Math.floor(Math.random() * praise.length)]); setTimeout(() => setNotice(""), 5000); } } catch (e) { setError(e instanceof Error ? e.message : "Couldn’t save your progress."); } finally { setSaving(false); }
+  function saveCheckin() {
+    if (!profile || !withinArc || goalSaveWorkerRef.current) return;
+    goalSaveWorkerRef.current = true;
+    setSavingCheckin(true);
+    setError("");
+    void (async () => {
+      while (true) {
+        const sequence = goalSaveSequenceRef.current;
+        const goalIds = [...goalIdsRef.current];
+        try {
+          const response = await fetch("/api/checkin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: today, goalIds }) });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error);
+          persistedGoalIdsRef.current = goalIds;
+          if (sequence !== goalSaveSequenceRef.current) continue;
+          setCheckins((old) => {
+            const existing = old.find((entry) => entry.date === today);
+            return [...old.filter((entry) => entry.date !== today), { ...existing, ...result.checkin }].sort((a,b) => a.date.localeCompare(b.date));
+          });
+          if (goalIds.length === profile.goals.length) { setNotice(praise[Math.floor(Math.random() * praise.length)]); setTimeout(() => setNotice(""), 5000); }
+          break;
+        } catch (e) {
+          if (sequence !== goalSaveSequenceRef.current) continue;
+          const rollback = [...persistedGoalIdsRef.current];
+          goalIdsRef.current = rollback;
+          setCheckins((old) => {
+            const existing = old.find((entry) => entry.date === today);
+            return [...old.filter((entry) => entry.date !== today), { ...existing, date: today, goalIds: rollback } as Checkin].sort((a,b) => a.date.localeCompare(b.date));
+          });
+          const reason = e instanceof Error ? e.message : "Couldn’t save today’s progress.";
+          setError(`${reason} Your change was undone.`);
+          break;
+        }
+      }
+      goalSaveWorkerRef.current = false;
+      setSavingCheckin(false);
+    })();
   }
   async function saveTrackerEntry(patch: Record<string, number>) {
     if (!profile || !trackerDate) return;
@@ -88,7 +124,18 @@ export default function Dashboard() {
     } catch (e) { setError(e instanceof Error ? e.message : "Couldn’t save this tracker entry."); }
     finally { setSaving(false); }
   }
-  function toggleGoal(goalId: string) { const current = new Set(completed); if (current.has(goalId)) current.delete(goalId); else current.add(goalId); void saveCheckin({ goalIds: [...current] }); }
+  function toggleGoal(goalId: string) {
+    const next = new Set(goalIdsRef.current);
+    if (next.has(goalId)) next.delete(goalId); else next.add(goalId);
+    const goalIds = [...next];
+    goalIdsRef.current = goalIds;
+    ++goalSaveSequenceRef.current;
+    setCheckins((old) => {
+      const existing = old.find((entry) => entry.date === today);
+      return [...old.filter((entry) => entry.date !== today), { ...existing, date: today, goalIds } as Checkin].sort((a,b) => a.date.localeCompare(b.date));
+    });
+    void saveCheckin();
+  }
   async function logout() { await fetch("/api/auth/logout", { method: "POST" }); router.push("/login"); router.refresh(); }
   async function uploadProgressPhoto(file?: File) {
     if (!file) return;
@@ -135,7 +182,7 @@ export default function Dashboard() {
         {!withinArc && <div className="season-note"><Sparkles size={17}/><span>{today < profile.startDate ? `Your arc begins ${compactDate(profile.startDate)}. Your goals will be ready then.` : "Your Winter Arc is complete. Take a moment to be proud of how far you came."}</span></div>}
         {notice && <div className="praise-toast"><span><Sparkles size={16}/></span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss"><X size={14}/></button></div>}
         {error && <div className="error-banner">{error}<button onClick={() => setError("")} aria-label="Dismiss"><X size={15}/></button></div>}
-        <div className="today-layout"><section className="card goals-card"><div className="card-heading"><div><span className="eyebrow">TODAY’S PRACTICE</span><h2>A few things for you</h2></div><span className="quiet-count">{completedCount} <i>/</i> {profile.goals.length}</span></div><div className="goal-progress-line"><i style={{ width: `${percent}%` }}/></div><div className="goal-list">{profile.goals.map((goal) => { const done = completed.includes(goal.id); return <button key={goal.id} className={`goal-row ${done ? "goal-done" : ""}`} disabled={!withinArc || saving} onClick={() => toggleGoal(goal.id)}><span className="goal-checkbox">{done && <Check size={14} strokeWidth={2.6}/>}</span><span className="goal-title">{goal.name}</span><span className="goal-category">{goal.category}</span></button>; })}</div><div className={`goal-footer ${percent === 100 && profile.goals.length > 0 ? "all-done" : ""}`}><span className="footer-sparkle"><Sparkles size={15}/></span><span>{percent === 100 && profile.goals.length > 0 ? "You showed up for yourself today. That’s everything." : "No rush. Every little thing counts."}</span><small>{saving ? "Saving…" : "TODAY ONLY"}</small></div></section>
+        <div className="today-layout"><section className="card goals-card"><div className="card-heading"><div><span className="eyebrow">TODAY’S PRACTICE</span><h2>A few things for you</h2></div><span className="quiet-count">{completedCount} <i>/</i> {profile.goals.length}</span></div><div className="goal-progress-line"><i style={{ width: `${percent}%` }}/></div><div className="goal-list">{profile.goals.map((goal) => { const done = completed.includes(goal.id); return <button key={goal.id} className={`goal-row ${done ? "goal-done" : ""}`} disabled={!withinArc} aria-pressed={done} onClick={() => toggleGoal(goal.id)}><span className="goal-checkbox">{done && <Check size={14} strokeWidth={2.6}/>}</span><span className="goal-title">{goal.name}</span><span className="goal-category">{goal.category}</span></button>; })}</div><div className={`goal-footer ${percent === 100 && profile.goals.length > 0 ? "all-done" : ""}`}><span className="footer-sparkle"><Sparkles size={15}/></span><span>{percent === 100 && profile.goals.length > 0 ? "You showed up for yourself today. That’s everything." : "No rush. Every little thing counts."}</span><small>{savingCheckin ? "SAVING…" : "TODAY ONLY"}</small></div></section>
           <section className="card snapshot-card"><div className="card-heading"><div><span className="eyebrow">YOUR ARC, SO FAR</span><h2>In this together</h2></div><span className="snapshot-icon"><Leaf size={17}/></span></div><div className="snapshot-number">{daysElapsed}<small> / {daysTotal} days</small></div><span className="snapshot-caption">of your Winter Arc</span><div className="snapshot-progress"><div><span>Season progress</span><b>{Math.round(daysElapsed / daysTotal * 100)}%</b></div><div className="snapshot-track"><i style={{ width: `${daysElapsed / daysTotal * 100}%` }}/></div></div><div className="snapshot-bottom"><span><span className="tiny-ring">{percent}%</span> of today’s goals done</span><span>{daysTotal - daysElapsed} to go <ArrowRight size={12}/></span></div></section></div>
         {(profile.trackers.weight || profile.trackers.mood || profile.trackers.sleep || profile.trackers.progressPhoto) && <section className="card tracker-panel"><div className="tracker-panel-heading"><div><span className="eyebrow">YOUR OPTIONAL TRACKERS</span><h2>Little details, over time</h2><p>Log a measurement or photo for today or a past date in your Winter Arc. Habit check-ins stay today-only.</p></div><label className="tracker-date-field">ENTRY DATE<input type="date" min={profile.startDate} max={trackerMaxDate} value={trackerDate} onChange={(e) => setTrackerDate(e.target.value)}/></label></div>{!trackerDateValid && <p className="tracker-hint">Choose a date within your Winter Arc to add a tracker entry.</p>}<div className="tracker-entry-grid">{profile.trackers.weight && <div className="tracker-entry"><label>Body weight <span>kg</span><input type="number" inputMode="decimal" min="1" max="700" step="0.1" placeholder="e.g. 68.5" value={weight} onChange={(e) => setWeight(e.target.value)} disabled={!trackerDateValid}/></label><button className="button button-primary" onClick={() => void saveTrackerEntry({ weight: Number(weight) })} disabled={!trackerDateValid || !weight || saving}>Save weight <ArrowRight size={13}/></button></div>}{profile.trackers.mood && <div className="tracker-entry"><span className="tracker-entry-title">How’s your mood?</span><div className="mood-control"><div>{[1,2,3,4,5].map((value) => <button key={value} className={mood === String(value) ? "mood-active" : ""} onClick={() => setMood(String(value))} disabled={!trackerDateValid} aria-label={`Mood ${value}`}>{["☁","◔","◑","◕","☀"][value-1]}</button>)}</div></div><button className="button button-primary" onClick={() => void saveTrackerEntry({ mood: Number(mood) })} disabled={!trackerDateValid || !mood || saving}>Save mood <ArrowRight size={13}/></button></div>}{profile.trackers.sleep && <div className="tracker-entry"><label>Hours of sleep<input type="number" min="0" max="24" step="0.5" placeholder="e.g. 8" value={sleep} onChange={(e) => setSleep(e.target.value)} disabled={!trackerDateValid}/></label><button className="button button-primary" onClick={() => void saveTrackerEntry({ sleep: Number(sleep) })} disabled={!trackerDateValid || sleep === "" || saving}>Save sleep <ArrowRight size={13}/></button></div>}{profile.trackers.progressPhoto && <div className="tracker-entry tracker-photo-entry"><span className="tracker-entry-title">Progress photo <small>{progressPhotos.some((item) => item.date === trackerDate) ? `A photo is saved for ${compactDate(trackerDate)}.` : "Add a photo for this date."}</small></span><label className={`button button-primary progress-photo-upload ${!trackerDateValid || saving ? "disabled" : ""}`}><Upload size={14}/>{saving ? "Uploading…" : progressPhotos.some((item) => item.date === trackerDate) ? "Replace photo" : "Choose photo"}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => void uploadProgressPhoto(e.target.files?.[0])} disabled={!trackerDateValid || saving}/></label><small>JPG, PNG, or WebP · up to 8 MB</small></div>}</div>{profile.trackers.progressPhoto && progressPhotos.length > 0 && <div className="progress-photo-gallery">{progressPhotos.map((item) => <figure key={item.date}><button type="button" className="progress-photo-thumb" onClick={() => setViewingPhoto(item)} aria-label={`View progress photo from ${compactDate(item.date)}`}><img src={item.photoUrl} alt=""/><span>View photo <ArrowUpRight size={12}/></span></button><figcaption><span>LOGGED</span><b>{compactDate(item.date)}</b></figcaption></figure>)}</div>}</section>}
         <section className="progress-section" id="progress"><div className="section-title"><div><span className="eyebrow">THE DAYS ARE ADDING UP</span><h2>Your progress</h2></div><span className="section-tag"><span/> A steady rhythm</span></div><div className="chart-grid"><section className="card chart-card"><div className="chart-heading"><div><h3>Days you showed up</h3><p>Daily goals completed · last 28 days</p></div><span className="chart-legend"><i/> GOALS DONE</span></div><div className="chart-wrap">{chartData.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} margin={{ top: 12, right: 0, bottom: 0, left: -24 }}><CartesianGrid vertical={false} stroke="#ebeae4" strokeDasharray="3 5"/><XAxis dataKey="label" tick={{ fontSize: 10, fill: "#9b9c90" }} axisLine={false} tickLine={false} interval="preserveStartEnd"/><YAxis domain={[0,100]} tick={{ fontSize: 10, fill: "#9b9c90" }} tickFormatter={(n) => `${n}%`} axisLine={false} tickLine={false} ticks={[0,25,50,75,100]}/><Tooltip cursor={{ fill: "#f6f6f1" }} formatter={(value) => [`${value}%`, "Goals done"]}/><Bar dataKey="done" fill="var(--accent)" radius={[4,4,0,0]} maxBarSize={24}/></BarChart></ResponsiveContainer> : <div className="chart-empty"><span>✳</span><b>Your first check-in starts a new little pattern.</b><small>Come back after today’s goals.</small></div>}</div></section>
