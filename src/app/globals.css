@@ -27,3 +27,5 @@ html[data-theme="dark"] .streak-icon{background:#302a23;color:#d2a176}
 html[data-theme="dark"] .sidebar-season>span:nth-child(2){color:#b7c2b1}
 html[data-theme="dark"] .sidebar-season b{color:#e7e9e2}
 html[data-theme="dark"] .mini-progress{background:#394239}
+html[data-theme="dark"] .streak-pill b{color:#e7e9e2}
+html[data-theme="dark"] .streak-pill small{color:#c5cfbf}
