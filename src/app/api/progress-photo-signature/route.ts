@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   const today = localDateKey(new Date(), user.timeZone || "UTC");
   if (!validDate(date) || date < user.startDate || date > user.endDate || date > today) return NextResponse.json({ error: "Choose a date from your Winter Arc that is today or earlier." }, { status: 400 });
   const timestamp = Math.floor(Date.now() / 1000);
-  const folder = `winter-arc/${id}/progress`;
-  const signature = createHash("sha1").update(`folder=${folder}&timestamp=${timestamp}${apiSecret}`).digest("hex");
-  return NextResponse.json({ cloudName, apiKey, timestamp, folder, signature, date });
+  const publicId = `winter-arc/${id}/progress/${date}`;
+  const signature = createHash("sha1").update(`overwrite=true&public_id=${publicId}&timestamp=${timestamp}${apiSecret}`).digest("hex");
+  return NextResponse.json({ cloudName, apiKey, timestamp, publicId, overwrite: true, signature, date });
 }
