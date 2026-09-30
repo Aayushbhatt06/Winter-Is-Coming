@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     const db = await database();
     if (await db.collection("users").findOne({ email })) return NextResponse.json({ error: "An account with that email already exists." }, { status: 409 });
     const userId = new ObjectId();
-    await db.collection("users").insertOne({ _id: userId, name, email, passwordHash: await hash(password, 12), startDate, endDate, timeZone, theme: ["forest", "ocean", "sunset", "lavender"].includes(body.theme) ? body.theme : "forest", goals, trackers: { weight: !!body.trackers?.weight, mood: !!body.trackers?.mood, sleep: !!body.trackers?.sleep, photo: !!body.trackers?.photo, progressPhoto: !!body.trackers?.progressPhoto }, createdAt: new Date() });
+    await db.collection("users").insertOne({ _id: userId, name, email, passwordHash: await hash(password, 12), startDate, endDate, timeZone, theme: ["forest", "ocean", "sunset", "lavender"].includes(body.theme) ? body.theme : "forest", goals, trackers: { weight: !!body.trackers?.weight, mood: !!body.trackers?.mood, sleep: true, photo: !!body.trackers?.photo, progressPhoto: !!body.trackers?.progressPhoto }, createdAt: new Date() });
     await createSession(userId.toString());
     return NextResponse.json({ ok: true });
   } catch (error) {

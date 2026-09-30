@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const trackers = user.trackers || {};
     for (const key of ["weight", "mood", "sleep"] as const) {
       if (body[key] === undefined || body[key] === null || body[key] === "") continue;
-      if (!trackers[key]) return NextResponse.json({ error: `Turn on ${key} tracking in your settings first.` }, { status: 403 });
+      if (key !== "sleep" && !trackers[key]) return NextResponse.json({ error: `Turn on ${key} tracking in your settings first.` }, { status: 403 });
       const value = Number(body[key]);
       const valid = key === "weight" ? Number.isFinite(value) && value > 0 && value <= 700 : key === "mood" ? Number.isInteger(value) && value >= 1 && value <= 5 : Number.isFinite(value) && value >= 0 && value <= 24;
       if (!valid) return NextResponse.json({ error: `Enter a valid ${key} value.` }, { status: 400 });

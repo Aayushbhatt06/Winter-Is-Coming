@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@next/swc-wasm-nodejs':
+        specifier: ^16.3.6
+        version: 16.3.6
       bcryptjs:
         specifier: ^2.4.3
         version: 2.4.3
@@ -265,6 +268,9 @@ packages:
     cpu: [x64]
     os: [linux]
     libc: [musl]
+
+  '@next/swc-wasm-nodejs@16.3.6':
+    resolution: {integrity: sha512-Qbh5QIWcyzZfp+neSFDxSaS0PjyCv7NUVipXcOaEp0+bCAynyGAoGnZirESQyPwpn/VXBncpZCVa0cnD+EWDmQ==}
 
   '@next/swc-win32-arm64-msvc@15.5.26':
     resolution: {integrity: sha512-HPl41fgkC4kdM5CCIoqNW6KlKEj1N+xS6bjNFFxDNKooUNUu09frgD948zo95TPw/C3XINZpkdkBGNU2RhjEnw==}
@@ -751,6 +757,8 @@ snapshots:
 
   '@next/swc-linux-x64-musl@15.5.26':
     optional: true
+
+  '@next/swc-wasm-nodejs@16.3.6': {}
 
   '@next/swc-win32-arm64-msvc@15.5.26':
     optional: true

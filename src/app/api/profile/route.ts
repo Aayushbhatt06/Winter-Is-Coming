@@ -19,7 +19,7 @@ export async function PATCH(request: Request) {
     const today = localDateKey(new Date(), user.timeZone || "UTC");
     if (startDate !== user.startDate && startDate < today) return NextResponse.json({ error: "A Winter Arc can’t be moved back to include past days." }, { status: 400 });
     if (endDate < today) return NextResponse.json({ error: "Your Winter Arc can’t end before today." }, { status: 400 });
-    await (await database()).collection("users").updateOne({ _id: new ObjectId(id) }, { $set: { goals, startDate, endDate, theme: ["forest", "ocean", "sunset", "lavender"].includes(body.theme) ? body.theme : "forest", trackers: { weight: !!body.trackers?.weight, mood: !!body.trackers?.mood, sleep: !!body.trackers?.sleep, photo: !!body.trackers?.photo, progressPhoto: !!body.trackers?.progressPhoto } } });
+    await (await database()).collection("users").updateOne({ _id: new ObjectId(id) }, { $set: { goals, startDate, endDate, theme: ["forest", "ocean", "sunset", "lavender"].includes(body.theme) ? body.theme : "forest", trackers: { weight: !!body.trackers?.weight, mood: !!body.trackers?.mood, sleep: true, photo: !!body.trackers?.photo, progressPhoto: !!body.trackers?.progressPhoto } } });
     return NextResponse.json({ ok: true });
   } catch (error) { console.error("Profile update failed", error); return NextResponse.json({ error: "Could not update your settings." }, { status: 500 }); }
 }
