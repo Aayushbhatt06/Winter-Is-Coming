@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     const user = await users.findOne({ _id: new ObjectId(id) });
     if (!user) return NextResponse.json({ error: "Account not found." }, { status: 404 });
     const today = localDateKey(new Date(), user.timeZone || "UTC");
-    if (date !== today || date < user.startDate || date > user.endDate) return NextResponse.json({ error: "Check-ins are only available today, during your Winter Arc." }, { status: 403 });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < user.startDate || date > user.endDate || date > today) return NextResponse.json({ error: "Choose today or a past date within your Winter Arc." }, { status: 403 });
     const validIds = new Set(user.goals.map((goal: { id: string }) => goal.id));
     const goalIds = Array.isArray(body.goalIds) ? [...new Set(body.goalIds.filter((goalId: unknown) => typeof goalId === "string" && validIds.has(goalId)))] : [];
     const entry: Record<string, unknown> = { userId: id, date, goalIds, updatedAt: new Date() };
