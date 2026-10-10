@@ -15,6 +15,6 @@ export async function GET() {
     const checkins = await db.collection("checkins").find({ userId: id }).sort({ date: 1 }).toArray();
     const trackerEntries = await db.collection("trackerEntries").find({ userId: id }).sort({ date: 1 }).toArray();
     const progressPhotos = await db.collection("progressPhotos").find({ userId: id }).sort({ date: 1 }).toArray();
-    return NextResponse.json({ profile: { ...profile, _id: id } as Profile, checkins: checkins.map(({ _id, userId: _uid, ...checkin }) => checkin), trackerEntries: trackerEntries.map(({ _id, userId: _uid, ...entry }) => entry), progressPhotos: progressPhotos.map(({ _id, userId: _uid, ...photo }) => photo) });
+    return NextResponse.json({ profile: { ...profile, _id: id } as Profile, checkins: checkins.map(({ _id, userId: _uid, ...checkin }) => checkin), trackerEntries: trackerEntries.map(({ _id, userId: _uid, ...entry }) => entry), progressPhotos: progressPhotos.map(({ _id, userId: _uid, ...photo }) => ({ ...photo, id: _id.toString() })) });
   } catch (error) { console.error("Profile read failed", error); return NextResponse.json({ error: "Could not load your Winter Arc." }, { status: 500 }); }
 }

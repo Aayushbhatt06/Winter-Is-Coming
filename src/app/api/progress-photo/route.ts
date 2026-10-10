@@ -20,15 +20,18 @@ export async function POST(request: Request) {
     if (!user?.trackers?.progressPhoto) return NextResponse.json({ error: "Turn on progress photos in your settings first." }, { status: 403 });
     const today = localDateKey(new Date(), user.timeZone || "UTC");
     if (!validDate(date) || date < user.startDate || date > user.endDate || date > today) return NextResponse.json({ error: "Choose a date from your Winter Arc that is today or earlier." }, { status: 400 });
-    const expectedPublicId = `winter-arc/${id}/progress/${date}`;
+    if (typeof publicId !== "string" || !publicId.startsWith(`winter-arc/${id}/progress/${date}/`)) return NextResponse.json({ error: "That photo doesn’t belong to this date in your progress folder." }, { status: 400 });
     const uploadedUrl = new URL(photoUrl);
     const uploadPrefix = `/${process.env.CLOUDINARY_CLOUD_NAME}/image/upload/`;
     const deliveredPublicId = uploadedUrl.pathname.startsWith(uploadPrefix) ? uploadedUrl.pathname.slice(uploadPrefix.length).replace(/^v\d+\//, "").replace(/\.[^/.]+$/, "") : "";
-    if (publicId !== expectedPublicId || uploadedUrl.hostname !== "res.cloudinary.com" || deliveredPublicId !== expectedPublicId) return NextResponse.json({ error: "That photo doesn’t belong to this date in your progress folder." }, { status: 400 });
+    if (uploadedUrl.hostname !== "res.cloudinary.com" || deliveredPublicId !== publicId) return NextResponse.json({ error: "That photo doesn’t belong to this date in your progress folder." }, { status: 400 });
     const collection = db.collection("progressPhotos");
-    await collection.createIndex({ userId: 1, date: 1 }, { unique: true });
-    await collection.updateOne({ userId: id, date }, { $set: { userId: id, date, photoUrl, publicId, updatedAt: new Date() } }, { upsert: true });
-    return NextResponse.json({ ok: true, photo: { date, photoUrl, publicId } });
+    const indexes = await collection.listIndexes().toArray();
+    const legacyUniqueDateIndex = indexes.find((index) => index.unique && index.key?.userId === 1 && index.key?.date === 1 && Object.keys(index.key).length === 2);
+    if (legacyUniqueDateIndex?.name) await collection.dropIndex(legacyUniqueDateIndex.name);
+    await collection.createIndex({ userId: 1, date: 1 });
+    const result = await collection.insertOne({ userId: id, date, photoUrl, publicId, updatedAt: new Date() });
+    return NextResponse.json({ ok: true, photo: { id: result.insertedId.toString(), date, photoUrl, publicId } });
   } catch (error) { console.error("Progress photo save failed", error); return NextResponse.json({ error: "Could not save your progress photo." }, { status: 500 }); }
 }
 
@@ -36,14 +39,14 @@ export async function DELETE(request: Request) {
   const id = await getSessionUserId();
   if (!id || !ObjectId.isValid(id)) return NextResponse.json({ error: "Please log in." }, { status: 401 });
   try {
-    const { date } = await request.json();
-    if (!validDate(date)) return NextResponse.json({ error: "Choose a valid photo date." }, { status: 400 });
+    const { id: photoId } = await request.json();
+    if (typeof photoId !== "string" || !ObjectId.isValid(photoId)) return NextResponse.json({ error: "Choose a valid progress photo." }, { status: 400 });
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
     const apiKey = process.env.CLOUDINARY_API_KEY;
     const apiSecret = process.env.CLOUDINARY_API_SECRET;
     if (!cloudName || !apiKey || !apiSecret) return NextResponse.json({ error: "Photo management isn’t configured yet." }, { status: 503 });
     const collection = (await database()).collection("progressPhotos");
-    const photo = await collection.findOne({ userId: id, date });
+    const photo = await collection.findOne({ _id: new ObjectId(photoId), userId: id });
     if (!photo) return NextResponse.json({ error: "That progress photo was already removed." }, { status: 404 });
 
     const ownedFolder = `winter-arc/${id}/progress/`;
@@ -70,8 +73,8 @@ export async function DELETE(request: Request) {
       console.error("Cloudinary progress-photo deletion failed:", cloudinaryResult.result || cloudinaryResult.error?.message || cloudinaryResponse.status);
       return NextResponse.json({ error: "Couldn’t remove the photo from Cloudinary. Please try again." }, { status: 502 });
     }
-    await collection.deleteOne({ userId: id, date });
-    return NextResponse.json({ ok: true, date });
+    await collection.deleteOne({ _id: photo._id, userId: id });
+    return NextResponse.json({ ok: true, date: photo.date, id: photoId });
   } catch (error) {
     console.error("Progress-photo deletion failed:", error instanceof Error ? error.message : "Unknown error");
     return NextResponse.json({ error: "Couldn’t remove this progress photo. Please try again." }, { status: 500 });
